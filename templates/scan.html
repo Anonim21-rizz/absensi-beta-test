@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scan Absensi QR</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="{{ url_for('static', filename='html5-qrcode.min.js') }}"
+            onerror="document.getElementById('loadError').style.display='block';"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #0a0a1a; color: #e0e0e0;
+            min-height: 100vh; display: flex;
+            flex-direction: column; align-items: center;
+            padding: 20px;
+        }
+        body::before {
+            content: '';
+            position: fixed; top: -50%; left: -50%;
+            width: 200%; height: 200%;
+            background: radial-gradient(circle at 50% 30%, rgba(99,102,241,0.08) 0%, transparent 50%),
+                        radial-gradient(circle at 50% 70%, rgba(168,85,247,0.06) 0%, transparent 50%);
+            z-index: 0;
+        }
+        .container {
+            position: relative; z-index: 1;
+            width: 100%; max-width: 440px;
+        }
+        .header {
+            text-align: center; margin-bottom: 20px;
+        }
+        .header h1 {
+            font-size: 1.6rem; font-weight: 800;
+            background: linear-gradient(135deg, #818cf8, #c084fc);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .header p { color: #94a3b8; font-size: 0.85rem; margin-top: 4px; }
+        .card {
+            background: rgba(15,15,35,0.85);
+            border: 1px solid rgba(99,102,241,0.15);
+            border-radius: 20px; padding: 24px;
+            backdrop-filter: blur(20px);
+            margin-bottom: 16px;
+        }
+        .card-title {
+            font-size: 0.95rem; font-weight: 700;
+            margin-bottom: 16px; display: flex;
+            align-items: center; gap: 8px;
+        }
+        .input-group { margin-bottom: 16px; }
+        .input-group label {
+            display: block; font-size: 0.8rem;
+            color: #94a3b8; margin-bottom: 6px; font-weight: 500;
+        }
+        .input-group input {
+            width: 100%; padding: 14px 16px;
+            border: 1px solid rgba(99,102,241,0.2);
+            border-radius: 12px; background: rgba(99,102,241,0.05);
+            color: #e0e0e0; font-size: 1rem;
+            font-family: 'Inter', sans-serif;
+            transition: border-color 0.3s, box-shadow 0.3s;
+            outline: none;
+        }
+        .input-group input:focus {
+            border-color: #6366f1;
+            box-shadow: 0 0 0 3px rgba(99,102,241,0.15);
+        }
+        .input-group input::placeholder { color: #4b5563; }
+        #reader {
+            width: 100%; border-radius: 12px; overflow: hidden;
+            border: 2px solid rgba(99,102,241,0.2);
+        }
+        #reader video { border-radius: 12px; }
+        .btn {
+            width: 100%; padding: 14px;
+            border: none; border-radius: 12px;
+            font-size: 1rem; font-weight: 600;
+            font-family: 'Inter', sans-serif;
+            cursor: pointer; transition: all 0.3s;
+            display: flex; align-items: center;
+            justify-content: center; gap: 8px;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            color: #fff;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(99,102,241,0.3);
+        }
+        .btn-primary:disabled {
+            opacity: 0.5; cursor: not-allowed;
+            transform: none; box-shadow: none;
+        }
+        .btn-danger {
+            background: rgba(239,68,68,0.15);
+            color: #f87171; border: 1px solid rgba(239,68,68,0.2);
+        }
+        .alert {
+            padding: 14px 18px; border-radius: 12px;
+            margin-top: 16px; font-size: 0.9rem;
+            font-weight: 500; display: none;
+            animation: slideIn 0.3s ease;
+        }
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .alert-success {
+            background: rgba(16,185,129,0.12);
+            border: 1px solid rgba(16,185,129,0.25);
+            color: #34d399;
+        }
+        .alert-error {
+            background: rgba(239,68,68,0.12);
+            border: 1px solid rgba(239,68,68,0.25);
+            color: #f87171;
+        }
+        .scanner-overlay {
+            position: relative;
+        }
+        .scan-hint {
+            text-align: center; margin-top: 12px;
+            font-size: 0.8rem; color: #94a3b8;
+        }
+        .status-dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            display: inline-block; margin-right: 6px;
+        }
+        .dot-active { background: #34d399; animation: blink 1.5s infinite; }
+        .dot-idle { background: #64748b; }
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+        .steps {
+            display: flex; gap: 8px; margin-bottom: 16px;
+        }
+        .step {
+            flex: 1; text-align: center; padding: 10px 6px;
+            border-radius: 10px; font-size: 0.75rem;
+            font-weight: 600; color: #64748b;
+            background: rgba(99,102,241,0.04);
+            border: 1px solid rgba(99,102,241,0.08);
+            transition: all 0.3s;
+        }
+        .step.active {
+            color: #818cf8;
+            background: rgba(99,102,241,0.1);
+            border-color: rgba(99,102,241,0.3);
+        }
+        .step.done {
+            color: #34d399;
+            background: rgba(16,185,129,0.1);
+            border-color: rgba(16,185,129,0.3);
+        }
+        .step-num {
+            display: block; font-size: 1.1rem; margin-bottom: 2px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📱 Scan Absensi</h1>
+            <p>Arahkan kamera ke QR Code yang ditampilkan di komputer</p>
+        </div>
+
+        <!-- Steps -->
+        <div class="steps">
+            <div class="step active" id="step1">
+                <span class="step-num">1</span> Isi Nama
+            </div>
+            <div class="step" id="step2">
+                <span class="step-num">2</span> Scan QR
+            </div>
+            <div class="step" id="step3">
+                <span class="step-num">3</span> Selesai
+            </div>
+        </div>
+
+        <!-- Step 1: Name Input -->
+        <div class="card" id="nameCard">
+            <div class="card-title">👤 Identitas</div>
+            <div class="input-group">
+                <label for="userName">Nama Lengkap / ID</label>
+                <input type="text" id="userName" placeholder="Masukkan nama Anda..." autocomplete="off">
+            </div>
+            <button class="btn btn-primary" id="startScanBtn" onclick="startScanner()">
+                🔍 Mulai Scan
+            </button>
+        </div>
+
+        <!-- Step 2: Scanner -->
+        <div class="card" id="scanCard" style="display:none;">
+            <div class="card-title">
+                <span class="status-dot dot-active"></span> Kamera Aktif
+            </div>
+            <div class="scanner-overlay">
+                <div id="reader"></div>
+            </div>
+            <p class="scan-hint">Arahkan kamera ke QR Code di layar komputer</p>
+            <button class="btn btn-danger" onclick="stopScanner()" style="margin-top: 12px;">
+                ✖ Batal
+            </button>
+        </div>
+
+        <!-- Library Load Error -->
+        <div class="card" id="loadError" style="display:none;">
+            <div class="card-title">⚠️ Gagal Memuat Library</div>
+            <p style="color:#f87171; font-size:0.9rem; line-height:1.6;">
+                Library QR scanner gagal dimuat. Kemungkinan penyebab:
+            </p>
+            <ul style="color:#94a3b8; font-size:0.85rem; margin: 12px 0 12px 20px; line-height:1.8;">
+                <li>PythonAnywhere memblokir akses ke <code>unpkg.com</code></li>
+                <li>Koneksi internet bermasalah</li>
+            </ul>
+            <p style="color:#94a3b8; font-size:0.85rem; line-height:1.6;">
+                Gunakan input manual di bawah, atau coba reload halaman.
+            </p>
+        </div>
+
+        <!-- Manual Token Fallback -->
+        <div class="card" id="manualCard" style="display:none;">
+            <div class="card-title">⌨️ Input Manual Token</div>
+            <div class="input-group">
+                <label for="manualToken">Token QR Code</label>
+                <input type="text" id="manualToken" placeholder="Tempel token dari QR Code...">
+            </div>
+            <button class="btn btn-primary" onclick="submitManualToken()">
+                📤 Kirim Absensi
+            </button>
+        </div>
+
+        <!-- Alert -->
+        <div class="alert" id="alertBox"></div>
+    </div>
+
+    <script>
+        let scanner = null;
+        let isProcessing = false;
+
+        // Check if html5-qrcode library loaded successfully
+        window.addEventListener('DOMContentLoaded', () => {
+            if (typeof Html5Qrcode === 'undefined') {
+                document.getElementById('loadError').style.display = 'block';
+                document.getElementById('manualCard').style.display = 'block';
+                document.getElementById('startScanBtn').disabled = true;
+                document.getElementById('startScanBtn').textContent = '❌ Scanner Tidak Tersedia';
+                console.error('html5-qrcode library failed to load');
+            }
+        });
+
+        function setStep(n) {
+            ['step1','step2','step3'].forEach((id, i) => {
+                const el = document.getElementById(id);
+                el.className = 'step';
+                if (i + 1 < n) el.classList.add('done');
+                if (i + 1 === n) el.classList.add('active');
+            });
+        }
+
+        function showAlert(msg, type) {
+            const box = document.getElementById('alertBox');
+            box.className = 'alert alert-' + type;
+            box.textContent = msg;
+            box.style.display = 'block';
+            if (type === 'success') {
+                setTimeout(() => { box.style.display = 'none'; }, 5000);
+            }
+        }
+
+        function startScanner() {
+            if (typeof Html5Qrcode === 'undefined') {
+                showAlert('Library QR scanner gagal dimuat. Gunakan input manual di bawah.', 'error');
+                document.getElementById('manualCard').style.display = 'block';
+                return;
+            }
+
+            const name = document.getElementById('userName').value.trim();
+            if (!name) {
+                showAlert('Silakan isi nama terlebih dahulu!', 'error');
+                document.getElementById('userName').focus();
+                return;
+            }
+            document.getElementById('alertBox').style.display = 'none';
+            document.getElementById('nameCard').style.display = 'none';
+            document.getElementById('scanCard').style.display = 'block';
+            setStep(2);
+
+            scanner = new Html5Qrcode("reader");
+            scanner.start(
+                { facingMode: "environment" },
+                { fps: 10, qrbox: { width: 250, height: 250 } },
+                onScanSuccess,
+                () => {}
+            ).catch(err => {
+                console.error('Camera error:', err);
+                showAlert('Gagal membuka kamera: ' + err, 'error');
+                stopScanner();
+                // Show manual input as fallback
+                document.getElementById('manualCard').style.display = 'block';
+            });
+        }
+
+        async function onScanSuccess(token) {
+            if (isProcessing) return;
+            isProcessing = true;
+
+            // stop camera
+            try { await scanner.stop(); } catch (e) {}
+
+            const userName = document.getElementById('userName').value.trim();
+            await doSubmit(token, userName);
+            isProcessing = false;
+        }
+
+        async function submitManualToken() {
+            const userName = document.getElementById('userName').value.trim();
+            const token = document.getElementById('manualToken').value.trim();
+            if (!userName) {
+                showAlert('Silakan isi nama terlebih dahulu!', 'error');
+                document.getElementById('userName').focus();
+                return;
+            }
+            if (!token) {
+                showAlert('Silakan tempel token QR Code!', 'error');
+                document.getElementById('manualToken').focus();
+                return;
+            }
+            await doSubmit(token, userName);
+        }
+
+        async function doSubmit(token, userName) {
+            try {
+                const res = await fetch('/submit_absen', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token: token, user_name: userName })
+                });
+                const data = await res.json();
+
+                document.getElementById('scanCard').style.display = 'none';
+                document.getElementById('nameCard').style.display = 'block';
+
+                if (data.success) {
+                    setStep(3);
+                    showAlert('✅ ' + data.message + ' (' + data.waktu + ')', 'success');
+                } else {
+                    setStep(1);
+                    showAlert(data.message, 'error');
+                }
+            } catch (e) {
+                document.getElementById('scanCard').style.display = 'none';
+                document.getElementById('nameCard').style.display = 'block';
+                setStep(1);
+                showAlert('Gagal mengirim data. Periksa koneksi jaringan.', 'error');
+            }
+        }
+
+        function stopScanner() {
+            if (scanner) {
+                scanner.stop().catch(() => {});
+            }
+            document.getElementById('scanCard').style.display = 'none';
+            document.getElementById('nameCard').style.display = 'block';
+            setStep(1);
+        }
+
+        // Enter key to start scan
+        document.getElementById('userName').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') startScanner();
+        });
+    </script>
+</body>
+</html>

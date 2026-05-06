@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Sistem Absensi QR</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #0a0a1a;
+            color: #e0e0e0;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        body::before {
+            content: '';
+            position: fixed;
+            top: -50%; left: -50%;
+            width: 200%; height: 200%;
+            background: radial-gradient(circle at 30% 30%, rgba(99,102,241,0.08) 0%, transparent 50%),
+                        radial-gradient(circle at 70% 70%, rgba(168,85,247,0.06) 0%, transparent 50%);
+            animation: bgPulse 15s ease-in-out infinite alternate;
+            z-index: 0;
+        }
+        @keyframes bgPulse {
+            0% { transform: translate(0, 0) scale(1); }
+            100% { transform: translate(-3%, -3%) scale(1.05); }
+        }
+        .container {
+            position: relative; z-index: 1;
+            max-width: 1200px; margin: 0 auto; padding: 20px;
+        }
+        .header {
+            text-align: center; padding: 30px 0 20px;
+        }
+        .header h1 {
+            font-size: 2.2rem; font-weight: 800;
+            background: linear-gradient(135deg, #818cf8, #a78bfa, #c084fc);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            margin-bottom: 6px;
+        }
+        .header p { color: #94a3b8; font-size: 0.95rem; }
+        .grid {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 24px;
+            margin-top: 20px;
+        }
+        @media (max-width: 800px) {
+            .grid { grid-template-columns: 1fr; }
+        }
+        .card {
+            background: rgba(15,15,35,0.8);
+            border: 1px solid rgba(99,102,241,0.15);
+            border-radius: 20px; padding: 28px;
+            backdrop-filter: blur(20px);
+            transition: border-color 0.3s;
+        }
+        .card:hover { border-color: rgba(99,102,241,0.35); }
+        .card-title {
+            font-size: 1.1rem; font-weight: 700; margin-bottom: 20px;
+            display: flex; align-items: center; gap: 10px;
+        }
+        .card-title .icon {
+            width: 36px; height: 36px; border-radius: 10px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.2rem;
+        }
+        .icon-qr { background: linear-gradient(135deg, #6366f1, #8b5cf6); }
+        .icon-list { background: linear-gradient(135deg, #10b981, #059669); }
+        .qr-wrap {
+            text-align: center; padding: 20px;
+        }
+        .qr-wrap img {
+            width: 260px; height: 260px;
+            border-radius: 16px; border: 3px solid rgba(99,102,241,0.3);
+            background: #fff; padding: 8px;
+            transition: transform 0.4s, box-shadow 0.4s;
+        }
+        .qr-wrap img:hover {
+            transform: scale(1.03);
+            box-shadow: 0 0 30px rgba(99,102,241,0.25);
+        }
+        .qr-loading {
+            width: 260px; height: 260px; margin: 0 auto;
+            border-radius: 16px; background: rgba(99,102,241,0.05);
+            display: flex; align-items: center; justify-content: center;
+            border: 2px dashed rgba(99,102,241,0.2);
+        }
+        .spinner {
+            width: 40px; height: 40px;
+            border: 3px solid rgba(99,102,241,0.2);
+            border-top-color: #818cf8; border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .timer-bar {
+            margin-top: 16px; height: 4px; border-radius: 2px;
+            background: rgba(99,102,241,0.15); overflow: hidden;
+        }
+        .timer-fill {
+            height: 100%; border-radius: 2px;
+            background: linear-gradient(90deg, #6366f1, #a78bfa);
+            transition: width 0.3s linear;
+        }
+        .timer-text {
+            text-align: center; margin-top: 8px;
+            font-size: 0.85rem; color: #94a3b8;
+        }
+        .stats-bar {
+            display: flex; gap: 12px; margin-bottom: 16px;
+        }
+        .stat {
+            flex: 1; padding: 14px; border-radius: 12px;
+            background: rgba(99,102,241,0.06);
+            border: 1px solid rgba(99,102,241,0.1);
+            text-align: center;
+        }
+        .stat-num {
+            font-size: 1.6rem; font-weight: 800;
+            background: linear-gradient(135deg, #818cf8, #c084fc);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .stat-label { font-size: 0.75rem; color: #94a3b8; margin-top: 2px; }
+        .table-wrap {
+            max-height: 400px; overflow-y: auto; border-radius: 12px;
+        }
+        .table-wrap::-webkit-scrollbar { width: 4px; }
+        .table-wrap::-webkit-scrollbar-thumb { background: #6366f1; border-radius: 4px; }
+        table { width: 100%; border-collapse: collapse; }
+        thead th {
+            position: sticky; top: 0; z-index: 2;
+            background: rgba(15,15,35,0.95); padding: 12px;
+            text-align: left; font-size: 0.8rem;
+            text-transform: uppercase; letter-spacing: 0.5px;
+            color: #94a3b8; border-bottom: 1px solid rgba(99,102,241,0.15);
+        }
+        tbody tr {
+            border-bottom: 1px solid rgba(99,102,241,0.06);
+            transition: background 0.2s;
+            animation: fadeRow 0.4s ease;
+        }
+        tbody tr:hover { background: rgba(99,102,241,0.06); }
+        @keyframes fadeRow {
+            from { opacity: 0; transform: translateX(-10px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        td { padding: 12px; font-size: 0.9rem; }
+        td:first-child { font-weight: 600; }
+        .badge {
+            display: inline-block; padding: 3px 10px; border-radius: 20px;
+            font-size: 0.75rem; font-weight: 600;
+            background: rgba(16,185,129,0.12); color: #34d399;
+        }
+        .empty-state {
+            text-align: center; padding: 40px; color: #64748b;
+        }
+        .empty-state .em-icon { font-size: 2.5rem; margin-bottom: 10px; }
+        .btn-delete {
+            background: rgba(239,68,68,0.12); color: #f87171;
+            border: 1px solid rgba(239,68,68,0.2); border-radius: 8px;
+            padding: 5px 12px; font-size: 0.75rem; font-weight: 600;
+            cursor: pointer; transition: all 0.2s;
+            font-family: 'Inter', sans-serif;
+        }
+        .btn-delete:hover {
+            background: rgba(239,68,68,0.25);
+            transform: translateY(-1px);
+        }
+        .btn-clear {
+            background: rgba(239,68,68,0.1); color: #f87171;
+            border: 1px solid rgba(239,68,68,0.2); border-radius: 10px;
+            padding: 10px 20px; font-size: 0.85rem; font-weight: 600;
+            cursor: pointer; transition: all 0.2s; width: 100%;
+            font-family: 'Inter', sans-serif; margin-top: 12px;
+        }
+        .btn-clear:hover {
+            background: rgba(239,68,68,0.2);
+            transform: translateY(-1px);
+        }
+        .scan-info {
+            margin-top: 16px; text-align: center;
+            padding: 14px; border-radius: 12px;
+            background: rgba(99,102,241,0.06);
+            border: 1px solid rgba(99,102,241,0.1);
+            font-size: 0.85rem; color: #94a3b8;
+        }
+        .scan-info code {
+            background: rgba(99,102,241,0.15); padding: 2px 8px;
+            border-radius: 6px; color: #a78bfa; font-size: 0.85rem;
+        }
+        .pulse { animation: pulse 2s ease-in-out infinite; }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📋 Sistem Absensi QR Code</h1>
+            <p>QR berubah otomatis setiap 10 detik • Scan dari HP untuk absensi</p>
+        </div>
+        <div class="grid">
+            <!-- QR Code Card -->
+            <div class="card">
+                <div class="card-title">
+                    <span class="icon icon-qr">📱</span> QR Code Aktif
+                </div>
+                <div class="qr-wrap" id="qrWrap">
+                    <div class="qr-loading"><div class="spinner"></div></div>
+                </div>
+                <div class="timer-bar"><div class="timer-fill" id="timerFill" style="width:100%"></div></div>
+                <div class="timer-text" id="timerText">Memuat QR Code...</div>
+                <div class="scan-info">
+                    Buka di HP: <code id="scanUrl">http://&lt;IP&gt;/scan</code>
+                </div>
+            </div>
+            <!-- Attendance Card -->
+            <div class="card">
+                <div class="card-title">
+                    <span class="icon icon-list">📊</span> Daftar Absensi Hari Ini
+                </div>
+                <div class="stats-bar">
+                    <div class="stat">
+                        <div class="stat-num" id="totalCount">0</div>
+                        <div class="stat-label">Total Hadir</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-num" id="dateDisplay">-</div>
+                        <div class="stat-label">Tanggal</div>
+                    </div>
+                </div>
+                <div class="table-wrap" id="tableWrap">
+                    <div class="empty-state">
+                        <div class="em-icon">📭</div>
+                        <p>Belum ada absensi hari ini</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Set scan URL info ---
+        const host = window.location.hostname;
+        const port = window.location.port || '5000';
+        document.getElementById('scanUrl').textContent = `http://${host}:${port}/scan`;
+
+        // --- QR refresh ---
+        const QR_INTERVAL = 10; // seconds
+        let countdown = QR_INTERVAL;
+        let qrTimer = null;
+
+        async function refreshQR() {
+            try {
+                const res = await fetch('/generate_qr');
+                const d = await res.json();
+                if (d.success) {
+                    document.getElementById('qrWrap').innerHTML =
+                        `<img src="${d.qr_image}" alt="QR Code">`;
+                    countdown = QR_INTERVAL;
+                    updateTimerUI();
+                }
+            } catch (e) {
+                console.error('QR error:', e);
+            }
+        }
+
+        function updateTimerUI() {
+            const pct = (countdown / QR_INTERVAL) * 100;
+            document.getElementById('timerFill').style.width = pct + '%';
+            document.getElementById('timerText').textContent =
+                `QR baru dalam ${countdown} detik`;
+        }
+
+        function startQRLoop() {
+            refreshQR();
+            qrTimer = setInterval(() => {
+                countdown--;
+                if (countdown <= 0) {
+                    refreshQR();
+                } else {
+                    updateTimerUI();
+                }
+            }, 1000);
+        }
+
+        // --- Attendance polling ---
+        let prevCount = 0;
+        async function fetchAbsensi() {
+            try {
+                const res = await fetch('/get_absen');
+                const d = await res.json();
+                if (!d.success) return;
+
+                document.getElementById('totalCount').textContent = d.total;
+                document.getElementById('dateDisplay').textContent =
+                    d.tanggal.split('-').reverse().join('/');
+
+                if (d.data.length === 0) {
+                    document.getElementById('tableWrap').innerHTML =
+                        '<div class="empty-state"><div class="em-icon">📭</div><p>Belum ada absensi hari ini</p></div>';
+                    return;
+                }
+
+                let html = '<table><thead><tr><th>No</th><th>Nama</th><th>Waktu</th><th>Status</th><th>Aksi</th></tr></thead><tbody>';
+                d.data.forEach((item, i) => {
+                    const waktu = item.waktu.split(' ')[1] || item.waktu;
+                    html += `<tr><td>${d.data.length - i}</td><td>${item.nama}</td><td>${waktu}</td><td><span class="badge">Hadir</span></td><td><button class="btn-delete" onclick="hapusAbsen(${item.id}, '${item.nama}')">🗑 Hapus</button></td></tr>`;
+                });
+                html += '</tbody></table>';
+                html += '<button class="btn-clear" onclick="hapusSemua()">🗑 Hapus Semua Absensi Hari Ini</button>';
+                document.getElementById('tableWrap').innerHTML = html;
+
+                if (d.total > prevCount && prevCount > 0) {
+                    // flash effect
+                    document.getElementById('totalCount').style.color = '#34d399';
+                    setTimeout(() => document.getElementById('totalCount').style.color = '', 1500);
+                }
+                prevCount = d.total;
+            } catch (e) {
+                console.error('Fetch error:', e);
+            }
+        }
+
+        // --- Delete functions ---
+        async function hapusAbsen(id, nama) {
+            if (!confirm(`Yakin ingin menghapus absensi ${nama}?`)) return;
+            try {
+                const res = await fetch(`/delete_absen/${id}`, { method: 'DELETE' });
+                const d = await res.json();
+                if (d.success) fetchAbsensi();
+                else alert(d.message);
+            } catch (e) {
+                alert('Gagal menghapus: ' + e);
+            }
+        }
+
+        async function hapusSemua() {
+            if (!confirm('Yakin ingin menghapus SEMUA absensi hari ini?')) return;
+            try {
+                const res = await fetch('/clear_absen', { method: 'DELETE' });
+                const d = await res.json();
+                if (d.success) fetchAbsensi();
+                else alert(d.message);
+            } catch (e) {
+                alert('Gagal menghapus: ' + e);
+            }
+        }
+
+        // Start
+        startQRLoop();
+        fetchAbsensi();
+        setInterval(fetchAbsensi, 3000);
+    </script>
+</body>
+</html>
